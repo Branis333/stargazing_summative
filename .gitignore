@@ -1,0 +1,7 @@
+# Environments
+venv/
+env/
+.env
+.venv
+# Python bytecode
+__pycache__/
