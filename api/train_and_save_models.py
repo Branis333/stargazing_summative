@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
+from datetime import datetime
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
@@ -18,6 +19,15 @@ weather_data = pd.read_csv(weather_file_path)
 
 # Prepare data for model training
 def prepare_data():
+    # Extract datetime features from last_updated
+    print("Extracting time features from last_updated...")
+    weather_data['datetime'] = pd.to_datetime(weather_data['last_updated'])
+    weather_data['month'] = weather_data['datetime'].dt.month
+    weather_data['hour'] = weather_data['datetime'].dt.hour
+    weather_data['day_of_year'] = weather_data['datetime'].dt.dayofyear
+    weather_data['is_night'] = ((weather_data['hour'] >= 18) | 
+                              (weather_data['hour'] <= 5)).astype(int)
+    
     # Fill missing values
     weather_data_clean = weather_data.fillna({
         'cloud': weather_data['cloud'].mean(),
@@ -30,10 +40,12 @@ def prepare_data():
     
     # Create stargazing quality score (0-10 scale, higher is better)
     weather_data_clean['stargazing_quality'] = (
-        (100 - weather_data_clean['cloud']) * 0.4 +
-        (100 - weather_data_clean['humidity']) * 0.3 +
+        (100 - weather_data_clean['cloud']) * 0.35 +
+        (100 - weather_data_clean['humidity']) * 0.25 +
         (100 - np.clip(weather_data_clean['air_quality_PM2.5'] * 2, 0, 100)) * 0.15 +
-        (100 - np.clip(weather_data_clean['air_quality_PM10'], 0, 100)) * 0.15
+        (100 - np.clip(weather_data_clean['air_quality_PM10'], 0, 100)) * 0.15 +
+        # Add bonus points for nighttime (5% boost)
+        (weather_data_clean['is_night'] * 5)
     ) / 100 * 10
     
     return weather_data_clean
@@ -43,9 +55,21 @@ def train_and_save_models(use_small_model=True):
     print("Training and saving models...")
     data = prepare_data()
     
-    # Select features and target
-    features = ['latitude', 'longitude', 'cloud', 'humidity', 'air_quality_PM2.5', 
-                'air_quality_PM10', 'visibility_km', 'uv_index']
+    # Select features and target - now including time features
+    features = [
+        # Original features
+        'latitude', 'longitude', 'cloud', 'humidity', 'air_quality_PM2.5', 
+        'air_quality_PM10', 'visibility_km', 'uv_index',
+        # New time features
+        'month', 'day_of_year', 'hour', 'is_night'
+    ]
+    
+    # Verify all features exist
+    missing_features = [f for f in features if f not in data.columns]
+    if missing_features:
+        print(f"WARNING: Missing features: {missing_features}")
+        features = [f for f in features if f in data.columns]
+        
     X = data[features]
     y = data['stargazing_quality']
     
@@ -116,14 +140,48 @@ def train_and_save_models(use_small_model=True):
     if best_scaler is not None:
         joblib.dump(best_scaler, 'models/scaler.joblib', compress=9)
     
+    # Save features list for reference
     joblib.dump(features, 'models/features.joblib', compress=9)
+    print("Features saved:", features)
     
-    # Also save a smaller version with a different name
+    # Also save features as text for easy reference
+    with open('models/features.txt', 'w') as f:
+        f.write(','.join(features))
+    
+    # Show model size
     model_size = os.path.getsize('models/best_model.joblib') / (1024 * 1024)  # Size in MB
     print(f"Model file size: {model_size:.2f} MB")
     
     print("Models saved successfully!")
     return best_model_name, rf_r2
+
+# Test date sensitivity
+def test_date_sensitivity(model, features, scaler=None):
+    print("\nTesting date sensitivity...")
+    test_data = [{
+        'latitude': 40.7, 'longitude': -74.0,  # NYC
+        'cloud': 20, 'humidity': 60, 'air_quality_PM2.5': 15, 'air_quality_PM10': 20,
+        'visibility_km': 10, 'uv_index': 5,
+        'month': 5, 'day_of_year': 135, 'hour': 12, 'is_night': 0  # Daytime
+    }, {
+        'latitude': 40.7, 'longitude': -74.0,  # NYC
+        'cloud': 20, 'humidity': 60, 'air_quality_PM2.5': 15, 'air_quality_PM10': 20,
+        'visibility_km': 10, 'uv_index': 0,
+        'month': 5, 'day_of_year': 135, 'hour': 22, 'is_night': 1  # Nighttime
+    }]
+    
+    test_df = pd.DataFrame(test_data)
+    
+    # Make predictions
+    if scaler:
+        test_scaled = scaler.transform(test_df[features])
+        predictions = model.predict(test_scaled)
+    else:
+        predictions = model.predict(test_df[features])
+        
+    print(f"Daytime quality: {predictions[0]:.2f}/10")
+    print(f"Nighttime quality: {predictions[1]:.2f}/10")
+    print(f"Difference: {predictions[1] - predictions[0]:.2f}")
 
 if __name__ == "__main__":
     # Choose which model size to create (True for small, False for full-size)
@@ -132,8 +190,17 @@ if __name__ == "__main__":
     # Train and save the models
     best_model_name, rf_accuracy = train_and_save_models(use_small_model=use_small)
     
+    # Check if the model is date sensitive
+    best_model = joblib.load('models/best_model.joblib')
+    features = joblib.load('models/features.joblib')
+    scaler = None
+    if best_model_name == 'linear_regression':
+        scaler = joblib.load('models/scaler.joblib')
+    test_date_sensitivity(best_model, features, scaler)
+    
     print("\n========== SUMMARY ==========")
     print(f"Best model type: {best_model_name}")
     print(f"RandomForest R² score: {rf_accuracy:.4f}")
     print(f"Model size optimized for GitHub: {'Yes' if use_small else 'No'}")
+    print(f"Features used: {', '.join(features)}")
     print("==============================")

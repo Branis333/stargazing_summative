@@ -47,6 +47,7 @@ try:
     scaler = joblib.load(scaler_path) if os.path.exists(scaler_path) else None
     
     print("Pre-trained models loaded successfully!")
+    print(f"Model features: {features}")
     
 except Exception as e:
     print(f"Error loading pre-trained models: {str(e)}")
@@ -54,6 +55,15 @@ except Exception as e:
     
     # Define the training functions (as in your original code)
     def prepare_data():
+        # Extract time features from last_updated
+        print("Extracting time features...")
+        weather_data['datetime'] = pd.to_datetime(weather_data['last_updated'])
+        weather_data['month'] = weather_data['datetime'].dt.month
+        weather_data['day_of_year'] = weather_data['datetime'].dt.dayofyear
+        weather_data['hour'] = weather_data['datetime'].dt.hour
+        weather_data['is_night'] = ((weather_data['hour'] >= 18) | 
+                                   (weather_data['hour'] <= 5)).astype(int)
+        
         # Fill missing values
         weather_data_clean = weather_data.fillna({
             'cloud': weather_data['cloud'].mean(),
@@ -66,10 +76,12 @@ except Exception as e:
         
         # Create stargazing quality score (0-10 scale, higher is better)
         weather_data_clean['stargazing_quality'] = (
-            (100 - weather_data_clean['cloud']) * 0.4 +
-            (100 - weather_data_clean['humidity']) * 0.3 +
+            (100 - weather_data_clean['cloud']) * 0.35 +
+            (100 - weather_data_clean['humidity']) * 0.25 +
             (100 - np.clip(weather_data_clean['air_quality_PM2.5'] * 2, 0, 100)) * 0.15 +
-            (100 - np.clip(weather_data_clean['air_quality_PM10'], 0, 100)) * 0.15
+            (100 - np.clip(weather_data_clean['air_quality_PM10'], 0, 100)) * 0.15 +
+            # Add bonus points for nighttime (5% boost)
+            (weather_data_clean['is_night'] * 5)
         ) / 100 * 10
         
         return weather_data_clean
@@ -77,9 +89,14 @@ except Exception as e:
     def train_models():
         data = prepare_data()
         
-        # Select features and target
-        features = ['latitude', 'longitude', 'cloud', 'humidity', 'air_quality_PM2.5', 
-                    'air_quality_PM10', 'visibility_km', 'uv_index']
+        # Select features and target, now including time features
+        features = [
+            # Original features
+            'latitude', 'longitude', 'cloud', 'humidity', 'air_quality_PM2.5', 
+            'air_quality_PM10', 'visibility_km', 'uv_index',
+            # Time features
+            'month', 'day_of_year', 'hour', 'is_night'
+        ]
         X = data[features]
         y = data['stargazing_quality']
         
@@ -98,13 +115,13 @@ except Exception as e:
         lr_mse = mean_squared_error(y_test, lr_preds)
         
         # Train Decision Tree
-        dt_model = DecisionTreeRegressor(random_state=42)
+        dt_model = DecisionTreeRegressor(max_depth=8, random_state=42)
         dt_model.fit(X_train, y_train)  # Trees don't need scaling
         dt_preds = dt_model.predict(X_test)
         dt_mse = mean_squared_error(y_test, dt_preds)
         
-        # Train Random Forest
-        rf_model = RandomForestRegressor(n_estimators=100, random_state=42)
+        # Train Random Forest - smaller for lower file size
+        rf_model = RandomForestRegressor(n_estimators=20, max_depth=10, random_state=42)
         rf_model.fit(X_train, y_train)  # Trees don't need scaling
         rf_preds = rf_model.predict(X_test)
         rf_mse = mean_squared_error(y_test, rf_preds)
@@ -162,6 +179,8 @@ def predict_stargazing_quality(data: PredictionInput):
         closest_locations = weather_data.nsmallest(3, 'distance')
         
         # Extract time-related features
+        month = input_datetime.month
+        day_of_year = int(input_datetime.strftime('%j'))  # Day of year (1-366)
         hour = input_datetime.hour
         is_night = 1 if (hour >= 18 or hour <= 5) else 0
         
@@ -169,7 +188,7 @@ def predict_stargazing_quality(data: PredictionInput):
         weights = 1 / (closest_locations['distance'] + 0.01)  # Avoid division by zero
         weights = weights / weights.sum()
         
-        # Create feature vector for prediction
+        # Create feature vector for prediction with all required features
         input_features = pd.DataFrame([{
             'latitude': data.latitude,
             'longitude': data.longitude,
@@ -178,9 +197,22 @@ def predict_stargazing_quality(data: PredictionInput):
             'air_quality_PM2.5': (closest_locations['air_quality_PM2.5'] * weights).sum(),
             'air_quality_PM10': (closest_locations['air_quality_PM10'] * weights).sum(),
             'visibility_km': (closest_locations['visibility_km'] * weights).sum(),
-            'uv_index': (closest_locations['uv_index'] * weights).sum() * (1 - is_night)  # UV is 0 at night
+            'uv_index': (closest_locations['uv_index'] * weights).sum() * (1 - is_night),  # UV is 0 at night
+            # Add time features
+            'month': month,
+            'day_of_year': day_of_year, 
+            'hour': hour,
+            'is_night': is_night
         }])
         
+        # Verify all required features are present
+        missing_features = [f for f in features if f not in input_features.columns]
+        if missing_features:
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Missing features: {', '.join(missing_features)}"
+            )
+            
         # Scale if using linear regression
         if scaler is not None:
             input_scaled = scaler.transform(input_features[features])
@@ -205,6 +237,12 @@ def predict_stargazing_quality(data: PredictionInput):
                 "visibility_km": round(input_features['visibility_km'].values[0], 1)
             },
             "is_night": bool(is_night),
+            "time_info": {
+                "month": month,
+                "day_of_year": day_of_year,
+                "hour": hour,
+                "is_night": bool(is_night)
+            },
             "message": f"The sky is estimated to be {stargazing_percentage:.1f}% clear for stargazing"
         }
         

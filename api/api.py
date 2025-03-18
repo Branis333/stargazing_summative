@@ -23,8 +23,8 @@ app.add_middleware(
 )
 
 # Load the trained model and dataset
-MODEL_PATH = weather_file_path = r'C:\Users\user\Desktop\stargazing_summative\linear_regression\stargazing_model.pkl'
-DATA_PATH = weather_file_path = r'C:\Users\user\Desktop\stargazing_summative\linear_regression\GlobalWeatherRepository.csv'
+MODEL_PATH = r'C:\Users\user\Desktop\stargazing_summative\linear_regression\stargazing_model.pkl'
+DATA_PATH = r'C:\Users\user\Desktop\stargazing_summative\linear_regression\GlobalWeatherRepository.csv'
 
 try:
     model = joblib.load(MODEL_PATH)  # Load trained model
@@ -34,41 +34,12 @@ except Exception as e:
     print(f"Error loading model or data: {e}")
     model, weather_data = None, None
 
-# Features used for prediction
-FEATURES = ['latitude', 'longitude', 'cloud', 'humidity', 
-            'air_quality_PM2.5', 'air_quality_PM10', 'visibility_km', 'uv_index']
-
-def preprocess_input(latitude, longitude, datetime_str):
-    """Prepare input data for prediction."""
-    try:
-        input_datetime = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        raise ValueError("Invalid datetime format. Use YYYY-MM-DD HH:MM:SS")
-
-    # Find closest locations in dataset
-    weather_data["distance"] = np.sqrt(
-        (weather_data["latitude"] - latitude) ** 2 +
-        (weather_data["longitude"] - longitude) ** 2
-    )
-
-    closest_locations = weather_data.nsmallest(3, "distance")
-
-    # Calculate weighted average of features
-    weights = 1 / (closest_locations["distance"] + 0.01)
-    weights /= weights.sum()
-
-    input_features = pd.DataFrame([{
-        "latitude": latitude,
-        "longitude": longitude,
-        "cloud": (closest_locations["cloud"] * weights).sum(),
-        "humidity": (closest_locations["humidity"] * weights).sum(),
-        "air_quality_PM2.5": (closest_locations["air_quality_PM2.5"] * weights).sum(),
-        "air_quality_PM10": (closest_locations["air_quality_PM10"] * weights).sum(),
-        "visibility_km": (closest_locations["visibility_km"] * weights).sum(),
-        "uv_index": (closest_locations["uv_index"] * weights).sum()
-    }])
-
-    return input_features
+# Updated features list to include time features
+FEATURES = [
+    'latitude', 'longitude', 'cloud', 'humidity', 
+    'air_quality_PM2.5', 'air_quality_PM10', 'visibility_km', 'uv_index',
+    'month', 'day_of_year', 'hour', 'is_night'  # Added time features
+]
 
 # Input validation model
 class PredictionInput(BaseModel):
@@ -103,14 +74,16 @@ def predict_stargazing_quality(data: PredictionInput):
         closest_locations = weather_data.nsmallest(3, 'distance')
         
         # Extract time-related features
+        month = input_datetime.month
         hour = input_datetime.hour
+        day_of_year = int(input_datetime.strftime('%j'))  # Day of year (1-366)
         is_night = 1 if (hour >= 18 or hour <= 5) else 0
         
         # Calculate weighted average of features based on distance
         weights = 1 / (closest_locations['distance'] + 0.01)  # Avoid division by zero
         weights = weights / weights.sum()
         
-        # Create feature vector for prediction
+        # Create feature vector for prediction with all required features
         input_features = pd.DataFrame([{
             'latitude': data.latitude,
             'longitude': data.longitude,
@@ -119,7 +92,12 @@ def predict_stargazing_quality(data: PredictionInput):
             'air_quality_PM2.5': (closest_locations['air_quality_PM2.5'] * weights).sum(),
             'air_quality_PM10': (closest_locations['air_quality_PM10'] * weights).sum(),
             'visibility_km': (closest_locations['visibility_km'] * weights).sum(),
-            'uv_index': (closest_locations['uv_index'] * weights).sum() * (1 - is_night)  # UV is 0 at night
+            'uv_index': (closest_locations['uv_index'] * weights).sum() * (1 - is_night),  # UV is 0 at night
+            # Add time features
+            'month': month,
+            'day_of_year': day_of_year,
+            'hour': hour,
+            'is_night': is_night
         }])
         
         # Make prediction using the model
@@ -153,6 +131,12 @@ def predict_stargazing_quality(data: PredictionInput):
                 "visibility_km": round(input_features['visibility_km'].values[0], 1)
             },
             "is_night": bool(is_night),
+            "time_info": {
+                "month": month,
+                "day_of_year": day_of_year,
+                "hour": hour,
+                "is_night": bool(is_night)
+            },
             "message": f"The sky is estimated to be {stargazing_percentage:.1f}% clear for stargazing"
         }
         
