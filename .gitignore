@@ -5,3 +5,7 @@ env/
 .venv
 # Python bytecode
 __pycache__/
+# Java HotSpot error logs
+hs_err_pid*.log
+# Java replay logs
+replay_pid*.log

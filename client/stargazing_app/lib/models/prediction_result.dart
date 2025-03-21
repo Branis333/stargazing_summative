@@ -19,7 +19,9 @@ class PredictionResult {
     return PredictionResult(
       stargazingQualityPercentage: json['stargazing_quality_percentage'],
       referenceLocation: json['reference_location'],
-      predictedConditions: WeatherConditions.fromJson(json['predicted_conditions']),
+      predictedConditions: WeatherConditions.fromJson(
+        json['predicted_conditions'],
+      ),
       isNight: json['is_night'],
       timeInfo: TimeInfo.fromJson(json['time_info']),
       message: json['message'],
@@ -58,12 +60,16 @@ class TimeInfo {
   final int dayOfYear;
   final int hour;
   final bool isNight;
+  final bool isMorning;
+  final String timeCategory;
 
   TimeInfo({
     required this.month,
     required this.dayOfYear,
     required this.hour,
     required this.isNight,
+    required this.isMorning,
+    required this.timeCategory,
   });
 
   factory TimeInfo.fromJson(Map<String, dynamic> json) {
@@ -72,6 +78,8 @@ class TimeInfo {
       dayOfYear: json['day_of_year'],
       hour: json['hour'],
       isNight: json['is_night'],
+      isMorning: json['is_morning'],
+      timeCategory: json['time_category'],
     );
   }
 }

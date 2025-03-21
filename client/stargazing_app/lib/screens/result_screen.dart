@@ -7,9 +7,9 @@ class ResultScreen extends StatelessWidget {
   final PredictionResult result;
   final double latitude;
   final double longitude;
-  
+
   const ResultScreen({
-    Key? key, 
+    Key? key,
     required this.result,
     required this.latitude,
     required this.longitude,
@@ -38,35 +38,29 @@ class ResultScreen extends StatelessWidget {
               // Quality score card
               _buildQualityScoreCard(),
               SizedBox(height: 16),
-              
+
               // Location info
-              _buildInfoCard(
-                'Location',
-                [
-                  'Reference: ${result.referenceLocation}',
-                  'Coordinates: (${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)})',
-                ],
-                icon: Icons.location_on,
-              ),
+              _buildInfoCard('Location', [
+                'Reference: ${result.referenceLocation}',
+                'Coordinates: (${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)})',
+              ], icon: Icons.location_on),
               SizedBox(height: 16),
-              
+
               // Time info
-              _buildInfoCard(
-                'Time Information',
-                [
-                  'Month: ${result.timeInfo.month}',
-                  'Day of year: ${result.timeInfo.dayOfYear}',
-                  'Hour: ${result.timeInfo.hour}:00',
-                  'Time of day: ${result.timeInfo.isNight ? "Night" : "Day"}',
-                ],
-                icon: Icons.access_time,
-              ),
+              _buildInfoCard('Time Information', [
+                'Month: ${result.timeInfo.month}',
+                'Day of year: ${result.timeInfo.dayOfYear}',
+                'Hour: ${result.timeInfo.hour}:00',
+                'Time category: ${result.timeInfo.timeCategory}',
+                'Is night: ${result.timeInfo.isNight ? "Yes" : "No"}',
+                'Is morning: ${result.timeInfo.isMorning ? "Yes" : "No"}',
+              ], icon: Icons.access_time),
               SizedBox(height: 16),
-              
+
               // Weather conditions chart
               _buildWeatherConditionsChart(),
               SizedBox(height: 24),
-              
+
               // Message card
               Card(
                 color: Colors.amber.shade700,
@@ -99,12 +93,12 @@ class ResultScreen extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildQualityScoreCard() {
     // Choose color based on quality
     Color qualityColor;
     String qualityText;
-    
+
     if (result.stargazingQualityPercentage >= 80) {
       qualityColor = Colors.green;
       qualityText = "Excellent";
@@ -118,12 +112,10 @@ class ResultScreen extends StatelessWidget {
       qualityColor = Colors.red;
       qualityText = "Poor";
     }
-    
+
     return Card(
       color: Colors.indigo.shade700,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -178,13 +170,11 @@ class ResultScreen extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildInfoCard(String title, List<String> details, {IconData? icon}) {
     return Card(
       color: Colors.indigo.shade800,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -207,19 +197,21 @@ class ResultScreen extends StatelessWidget {
               ],
             ),
             Divider(color: Colors.white24),
-            ...details.map((detail) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: Text(
-                detail,
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+            ...details.map(
+              (detail) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                child: Text(
+                  detail,
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
               ),
-            )),
+            ),
           ],
         ),
       ),
     );
   }
-  
+
   Widget _buildWeatherConditionsChart() {
     // Prepare data for bar chart
     final conditions = result.predictedConditions;
@@ -228,14 +220,15 @@ class ResultScreen extends StatelessWidget {
       MapEntry('Humidity', conditions.humidity),
       MapEntry('PM2.5', conditions.airQualityPM25),
       MapEntry('PM10', conditions.airQualityPM10),
-      MapEntry('Visibility', conditions.visibilityKm * 10), // Scale up for visibility
+      MapEntry(
+        'Visibility',
+        conditions.visibilityKm * 10,
+      ), // Scale up for visibility
     ];
-    
+
     return Card(
       color: Colors.indigo.shade800,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -267,11 +260,21 @@ class ResultScreen extends StatelessWidget {
                           // Custom titles for the X-axis
                           String text = '';
                           switch (value.toInt()) {
-                            case 0: text = 'Cloud'; break;
-                            case 1: text = 'Humidity'; break;
-                            case 2: text = 'PM2.5'; break;
-                            case 3: text = 'PM10'; break;
-                            case 4: text = 'Visibility'; break;
+                            case 0:
+                              text = 'Cloud';
+                              break;
+                            case 1:
+                              text = 'Humidity';
+                              break;
+                            case 2:
+                              text = 'PM2.5';
+                              break;
+                            case 3:
+                              text = 'PM10';
+                              break;
+                            case 4:
+                              text = 'Visibility';
+                              break;
                           }
                           return Padding(
                             padding: const EdgeInsets.only(top: 8.0),
@@ -301,39 +304,58 @@ class ResultScreen extends StatelessWidget {
                         },
                       ),
                     ),
-                    topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
                   ),
                   gridData: FlGridData(show: true),
-                  barGroups: data.asMap().map((index, item) {
-                    // Color depends on the value and what's being measured
-                    Color barColor;
-                    if (index == 4) {  // Visibility - higher is better
-                      barColor = item.value > 60 ? Colors.green : 
-                               item.value > 30 ? Colors.amber : Colors.red;
-                    } else {  // For other metrics, lower is better
-                      barColor = item.value < 30 ? Colors.green : 
-                               item.value < 60 ? Colors.amber : Colors.red;
-                    }
-                    
-                    return MapEntry(
-                      index,
-                      BarChartGroupData(
-                        x: index,
-                        barRods: [
-                          BarChartRodData(
-                            toY: item.value,
-                            color: barColor,
-                            width: 22,
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(6),
-                              topRight: Radius.circular(6),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).values.toList(),
+                  barGroups:
+                      data
+                          .asMap()
+                          .map((index, item) {
+                            // Color depends on the value and what's being measured
+                            Color barColor;
+                            if (index == 4) {
+                              // Visibility - higher is better
+                              barColor =
+                                  item.value > 60
+                                      ? Colors.green
+                                      : item.value > 30
+                                      ? Colors.amber
+                                      : Colors.red;
+                            } else {
+                              // For other metrics, lower is better
+                              barColor =
+                                  item.value < 30
+                                      ? Colors.green
+                                      : item.value < 60
+                                      ? Colors.amber
+                                      : Colors.red;
+                            }
+
+                            return MapEntry(
+                              index,
+                              BarChartGroupData(
+                                x: index,
+                                barRods: [
+                                  BarChartRodData(
+                                    toY: item.value,
+                                    color: barColor,
+                                    width: 22,
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: Radius.circular(6),
+                                      topRight: Radius.circular(6),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          })
+                          .values
+                          .toList(),
                 ),
               ),
             ),

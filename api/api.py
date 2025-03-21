@@ -38,7 +38,7 @@ except Exception as e:
 FEATURES = [
     'latitude', 'longitude', 'cloud', 'humidity', 
     'air_quality_PM2.5', 'air_quality_PM10', 'visibility_km', 'uv_index',
-    'month', 'day_of_year', 'hour', 'is_night'  # Added time features
+    'month', 'day_of_year', 'hour', 'is_night', 'is_morning'  # Added is_morning
 ]
 
 # Input validation model
@@ -78,6 +78,7 @@ def predict_stargazing_quality(data: PredictionInput):
         hour = input_datetime.hour
         day_of_year = int(input_datetime.strftime('%j'))  # Day of year (1-366)
         is_night = 1 if (hour >= 18 or hour <= 5) else 0
+        is_morning = 1 if (hour >= 6 and hour <= 11) else 0  # Add this line
         
         # Calculate weighted average of features based on distance
         weights = 1 / (closest_locations['distance'] + 0.01)  # Avoid division by zero
@@ -92,12 +93,13 @@ def predict_stargazing_quality(data: PredictionInput):
             'air_quality_PM2.5': (closest_locations['air_quality_PM2.5'] * weights).sum(),
             'air_quality_PM10': (closest_locations['air_quality_PM10'] * weights).sum(),
             'visibility_km': (closest_locations['visibility_km'] * weights).sum(),
-            'uv_index': (closest_locations['uv_index'] * weights).sum() * (1 - is_night),  # UV is 0 at night
+            'uv_index': (closest_locations['uv_index'] * weights).sum() * (1 - is_night),
             # Add time features
             'month': month,
             'day_of_year': day_of_year,
             'hour': hour,
-            'is_night': is_night
+            'is_night': is_night,
+            'is_morning': is_morning  # Add this line
         }])
         
         # Make prediction using the model
@@ -135,7 +137,8 @@ def predict_stargazing_quality(data: PredictionInput):
                 "month": month,
                 "day_of_year": day_of_year,
                 "hour": hour,
-                "is_night": bool(is_night)
+                "is_night": bool(is_night),
+                "is_morning": bool(is_morning)  # Add this line
             },
             "message": f"The sky is estimated to be {stargazing_percentage:.1f}% clear for stargazing"
         }

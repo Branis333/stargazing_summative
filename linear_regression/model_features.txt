@@ -1,0 +1,1 @@
+latitude,longitude,cloud,humidity,air_quality_PM2.5,air_quality_PM10,visibility_km,uv_index,month,day_of_year,hour,is_night,is_morning

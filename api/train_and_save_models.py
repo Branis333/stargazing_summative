@@ -28,6 +28,10 @@ def prepare_data():
     weather_data['is_night'] = ((weather_data['hour'] >= 18) | 
                               (weather_data['hour'] <= 5)).astype(int)
     
+    # NEW: Add is_morning feature (6 AM to noon)
+    weather_data['is_morning'] = ((weather_data['hour'] >= 6) & 
+                                 (weather_data['hour'] <= 11)).astype(int)
+    
     # Fill missing values
     weather_data_clean = weather_data.fillna({
         'cloud': weather_data['cloud'].mean(),
@@ -39,13 +43,16 @@ def prepare_data():
     })
     
     # Create stargazing quality score (0-10 scale, higher is better)
+    # UPDATED: Added morning penalty
     weather_data_clean['stargazing_quality'] = (
         (100 - weather_data_clean['cloud']) * 0.35 +
         (100 - weather_data_clean['humidity']) * 0.25 +
         (100 - np.clip(weather_data_clean['air_quality_PM2.5'] * 2, 0, 100)) * 0.15 +
         (100 - np.clip(weather_data_clean['air_quality_PM10'], 0, 100)) * 0.15 +
         # Add bonus points for nighttime (5% boost)
-        (weather_data_clean['is_night'] * 5)
+        (weather_data_clean['is_night'] * 5) -
+        # NEW: Penalty for morning (10% reduction)
+        (weather_data_clean['is_morning'] * 10)
     ) / 100 * 10
     
     return weather_data_clean
@@ -60,8 +67,8 @@ def train_and_save_models(use_small_model=True):
         # Original features
         'latitude', 'longitude', 'cloud', 'humidity', 'air_quality_PM2.5', 
         'air_quality_PM10', 'visibility_km', 'uv_index',
-        # New time features
-        'month', 'day_of_year', 'hour', 'is_night'
+        # Time features
+        'month', 'day_of_year', 'hour', 'is_night', 'is_morning'  # Added is_morning
     ]
     
     # Verify all features exist
@@ -158,16 +165,22 @@ def train_and_save_models(use_small_model=True):
 # Test date sensitivity
 def test_date_sensitivity(model, features, scaler=None):
     print("\nTesting date sensitivity...")
+    # UPDATED: Added morning test case
     test_data = [{
         'latitude': 40.7, 'longitude': -74.0,  # NYC
         'cloud': 20, 'humidity': 60, 'air_quality_PM2.5': 15, 'air_quality_PM10': 20,
         'visibility_km': 10, 'uv_index': 5,
-        'month': 5, 'day_of_year': 135, 'hour': 12, 'is_night': 0  # Daytime
+        'month': 5, 'day_of_year': 135, 'hour': 8, 'is_night': 0, 'is_morning': 1  # Morning
+    }, {
+        'latitude': 40.7, 'longitude': -74.0,  # NYC
+        'cloud': 20, 'humidity': 60, 'air_quality_PM2.5': 15, 'air_quality_PM10': 20,
+        'visibility_km': 10, 'uv_index': 5,
+        'month': 5, 'day_of_year': 135, 'hour': 14, 'is_night': 0, 'is_morning': 0  # Afternoon
     }, {
         'latitude': 40.7, 'longitude': -74.0,  # NYC
         'cloud': 20, 'humidity': 60, 'air_quality_PM2.5': 15, 'air_quality_PM10': 20,
         'visibility_km': 10, 'uv_index': 0,
-        'month': 5, 'day_of_year': 135, 'hour': 22, 'is_night': 1  # Nighttime
+        'month': 5, 'day_of_year': 135, 'hour': 22, 'is_night': 1, 'is_morning': 0  # Nighttime
     }]
     
     test_df = pd.DataFrame(test_data)
@@ -178,10 +191,17 @@ def test_date_sensitivity(model, features, scaler=None):
         predictions = model.predict(test_scaled)
     else:
         predictions = model.predict(test_df[features])
-        
-    print(f"Daytime quality: {predictions[0]:.2f}/10")
-    print(f"Nighttime quality: {predictions[1]:.2f}/10")
-    print(f"Difference: {predictions[1] - predictions[0]:.2f}")
+    
+    # Print results with time labels  
+    time_labels = ["Morning", "Afternoon", "Night"]
+    
+    for i, (label, pred) in enumerate(zip(time_labels, predictions)):
+        print(f"{label} quality: {pred:.2f}/10")
+    
+    # Show differences
+    print(f"Night vs Afternoon difference: {predictions[2] - predictions[1]:.2f}")
+    print(f"Night vs Morning difference: {predictions[2] - predictions[0]:.2f}")
+    print(f"Afternoon vs Morning difference: {predictions[1] - predictions[0]:.2f}")
 
 if __name__ == "__main__":
     # Choose which model size to create (True for small, False for full-size)
@@ -203,4 +223,6 @@ if __name__ == "__main__":
     print(f"RandomForest R² score: {rf_accuracy:.4f}")
     print(f"Model size optimized for GitHub: {'Yes' if use_small else 'No'}")
     print(f"Features used: {', '.join(features)}")
+    print(f"Morning penalty applied: Yes (10%)")
+    print(f"Night bonus applied: Yes (5%)")
     print("==============================")
