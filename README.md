@@ -66,5 +66,22 @@ To run the mobile app, follow these steps:
     ```sh
     flutter run
     ```
+## Running the Python fastapi localy
+To run the fastapi, follow these steps:
 
+1. **Clone the Repository**:
+    ```sh
+    git clone https://github.com/Branis333/stargazing_summative
+    cd api
+    ```
+
+2. **Install Dependencies**:
+    ```sh
+    pip install -r requirements.py 
+    ```
+
+3. **Run the App**:
+    ```sh
+    uvicorn api2:app --reload 
+    ```
 Make sure you have Flutter installed and set up on your machine. For more information, visit the [Flutter installation guide](https://flutter.dev/docs/get-started/install).
